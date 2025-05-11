@@ -128,34 +128,41 @@
       container.append(div);
     });
 
-    // Показ і озвучення букви через SpeechSynthesis
+    // Показ і озвучення букви через SpeechSynthesis з fallback на російську
     function showLetter(L) {
-      // Відобразити велику букву
       bigDiv.textContent = L;
       overlay.style.display = 'flex';
       clearTimeout(hideTimer);
       hideTimer = setTimeout(() => overlay.style.display = 'none', 2000);
 
-      // Перевірка підтримки API
       if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
         showError('Ваш браузер не підтримує Speech Synthesis API');
         return;
       }
+
       const voices = speechSynthesis.getVoices();
       if (!voices.length) {
         showError('Голоси не завантажені');
         return;
       }
-      // Знаходимо український голос
-      const ukVoice = voices.find(v => v.lang.startsWith('uk'));
-      if (!ukVoice) {
-        showError('Український голос не знайдено');
+
+      // Спроба українського голосу, потім російського
+      let voice = voices.find(v => v.lang.startsWith('uk'));
+      if (!voice) {
+        voice = voices.find(v => v.lang.startsWith('ru'));
+        if (voice) {
+          console.warn('Використовується російський голос замість українського');
+        }
+      }
+      if (!voice) {
+        showError('Не знайдено українського чи російського голосу');
         return;
       }
+
       try {
         const utt = new SpeechSynthesisUtterance(L);
-        utt.voice = ukVoice;
-        utt.lang  = ukVoice.lang;
+        utt.voice = voice;
+        utt.lang  = voice.lang;
         utt.rate  = 0.9;
         utt.pitch = 1.1;
         speechSynthesis.cancel();
@@ -192,7 +199,6 @@
       navigator.serviceWorker.register('sw.js')
         .catch(err => showError('SW registration failed'));
     }
-    // Для завантаження голосів у деяких браузерах
     speechSynthesis.onvoiceschanged = () => {};
   </script>
 </body>
