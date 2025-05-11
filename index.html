@@ -2,8 +2,13 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Вивчення букв</title>
+
+  <!-- PWA: Manifest і колір статус-бара -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#48a">
+
   <style>
     * { box-sizing: border-box; }
     html, body {
@@ -12,72 +17,40 @@
       font-family: sans-serif;
       overflow: hidden;
     }
-
-    /* Контейнер листа квадратів */
     #container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--gap);
-      padding: var(--gap);
-      width: 100vw;
-      height: calc(100vh - var(--controls-height));
+      display: flex; flex-wrap: wrap;
+      gap: var(--gap); padding: var(--gap);
+      width: 100vw; height: calc(100vh - var(--controls-height));
     }
-
-    /* Квадратики-літери */
     .letter {
-      flex: 0 0 var(--cell-size);
-      height: var(--cell-size);
-      background: #eef;
-      border: 2px solid #99c;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: calc(var(--cell-size) * 0.5);
-      user-select: none;
-      touch-action: manipulation;
-      cursor: pointer;
+      flex: 0 0 var(--cell-size); height: var(--cell-size);
+      background: #eef; border: 2px solid #99c; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: calc(var(--cell-size)*0.5);
+      user-select: none; touch-action: manipulation; cursor: pointer;
       transition: background .2s, transform .2s;
     }
     .letter:active {
-      background: #ddf;
-      transform: scale(0.95);
+      background: #ddf; transform: scale(0.95);
     }
-
-    /* Повноекранний оверлей для однієї букви */
     #overlay {
-      position: fixed;
-      top: 0; left: 0;
+      position: fixed; top: 0; left: 0;
       width: 100vw; height: 100vh;
-      display: none;
-      align-items: center; justify-content: center;
-      background: #fff;
-      z-index: 100;
+      display: none; align-items: center; justify-content: center;
+      background: #fff; z-index: 100;
     }
-    #overlay .big {
-      font-size: 20vw;
-    }
-
-    /* Кнопка для мобільної клавіатури */
+    #overlay .big { font-size: 20vw; }
     #controls {
-      position: fixed;
-      bottom: 10px; left: 50%;
-      transform: translateX(-50%);
-      z-index: 200;
+      position: fixed; bottom: 10px; left: 50%;
+      transform: translateX(-50%); z-index: 200;
     }
     #controls button {
-      padding: 10px 20px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 5px;
-      background: #48a;
-      color: #fff;
+      padding: 10px 20px; font-size: 1rem;
+      border: none; border-radius: 5px;
+      background: #48a; color: #fff;
     }
-    /* Приховане поле для виклику моб. клавіатури */
     #hidden-input {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
+      position: absolute; opacity: 0; pointer-events: none;
       height: 0; width: 0;
     }
   </style>
@@ -85,80 +58,76 @@
 <body>
 
   <div id="container"></div>
-
   <div id="overlay"><div class="big"></div></div>
-
   <div id="controls">
     <button id="show-keyboard">Показати клавіатуру</button>
   </div>
   <input type="text" id="hidden-input" inputmode="text" autocomplete="off">
 
   <script>
+    // 33 літери українського алфавіту
     const letters = ['А','Б','В','Г','Ґ','Д','Е','Є','Ж','З','И','І','Ї','Й',
                      'К','Л','М','Н','О','П','Р','С','Т','У','Ф','Х','Ц','Ч','Ш','Щ','Ь','Ю','Я'];
-    const container = document.getElementById('container');
-    const overlay   = document.getElementById('overlay');
-    const bigDiv    = overlay.querySelector('.big');
-    const controls  = document.getElementById('controls');
-    const hiddenInput = document.getElementById('hidden-input');
-    let hideTimer = null;
 
-    // 1) Динамічний розрахунок розміру квадрата
+    const container   = document.getElementById('container');
+    const overlay     = document.getElementById('overlay');
+    const bigDiv      = overlay.querySelector('.big');
+    const controls    = document.getElementById('controls');
+    const hiddenInput = document.getElementById('hidden-input');
+    let hideTimer     = null;
+
+    // Розкладка квадратиків
     function layout() {
-      const gap = 5; // відступ між квадратиками
-      const totalW = window.innerWidth - gap * 2;
-      const controlsH = controls.getBoundingClientRect().height + 10; // плюс нижній відступ
-      const totalH = window.innerHeight - controlsH - gap * 2;
-      const count = letters.length;
-      let bestSize = 0;
-      for (let cols = 1; cols <= count; cols++) {
-        const rows = Math.ceil(count / cols);
-        const cellW = (totalW - gap * (cols - 1)) / cols;
-        const totalGridH = rows * cellW + gap * (rows - 1);
-        if (totalGridH <= totalH && cellW > bestSize) {
-          bestSize = cellW;
-        }
+      const gap       = 5;
+      const totalW    = window.innerWidth - gap*2;
+      const controlsH = controls.getBoundingClientRect().height + 10;
+      const totalH    = window.innerHeight - controlsH - gap*2;
+      let bestSize    = 0;
+
+      for (let cols = 1; cols <= letters.length; cols++) {
+        const rows    = Math.ceil(letters.length / cols);
+        const cellW   = (totalW - gap*(cols-1)) / cols;
+        const gridH   = rows*cellW + gap*(rows-1);
+        if (gridH <= totalH && cellW > bestSize) bestSize = cellW;
       }
-      // Якщо не вписалося жодного разу, беремо максимально можливий по висоті
       if (bestSize === 0) {
-        // усі в один стовпець або по рядку
-        const cols = count;
-        const rows = 1;
-        const cellW = (totalW - gap * (cols - 1)) / cols;
-        const cellH = (totalH - gap * (rows - 1)) / rows;
-        bestSize = Math.min(cellW, cellH);
+        const cols   = letters.length;
+        const rows   = 1;
+        const cellW  = (totalW - gap*(cols-1)) / cols;
+        const cellH  = (totalH - gap*(rows-1)) / rows;
+        bestSize     = Math.min(cellW, cellH);
       }
-      // Встановлюємо CSS-змінні
+
       document.documentElement.style.setProperty('--gap', gap + 'px');
       document.documentElement.style.setProperty('--cell-size', bestSize + 'px');
-      document.documentElement.style.setProperty('--controls-height', controlsH + 'px');
+      document.documentElement.style.setProperty('--controls-height', `${controlsH}px`);
     }
 
-    // 2) Створюємо квадратики
+    // Створення елементів
     letters.forEach(L => {
       const div = document.createElement('div');
-      div.className = 'letter';
+      div.className   = 'letter';
       div.textContent = L;
       div.addEventListener('click', () => showLetter(L));
       container.append(div);
     });
 
-    // 3) Функція показу і озвучення букви
+    // Показ і озвучка букви
     function showLetter(L) {
       bigDiv.textContent = L;
       overlay.style.display = 'flex';
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => overlay.style.display = 'none', 3000);
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => overlay.style.display = 'none', 2000); // 2 секунди
 
-      const utter = new SpeechSynthesisUtterance(L);
-      utter.lang = 'uk-UA';
-      utter.rate  = 0.9;
-      utter.pitch = 1.1;
+      const utt    = new SpeechSynthesisUtterance(L);
+      utt.lang     = 'uk-UA';
+      utt.rate     = 0.9;
+      utt.pitch    = 1.1;
       speechSynthesis.cancel();
-      speechSynthesis.speak(utter);
+      speechSynthesis.speak(utt);
     }
 
-    // 4) Обробка з клавіатури
+    // Клавіатура фізична
     document.addEventListener('keydown', e => {
       const L = e.key.toUpperCase();
       if (letters.includes(L)) {
@@ -167,22 +136,23 @@
       }
     });
 
-    // 5) Моб. клавіатура
-    document.getElementById('show-keyboard').addEventListener('click', () => {
-      hiddenInput.focus();
-    });
+    // Кнопка моб. клавіатури
+    document.getElementById('show-keyboard')
+      .addEventListener('click', () => hiddenInput.focus());
     hiddenInput.addEventListener('input', e => {
-      const val = e.target.value.slice(-1).toUpperCase();
+      const L = e.target.value.slice(-1).toUpperCase();
       e.target.value = '';
-      if (letters.includes(val)) showLetter(val);
+      if (letters.includes(L)) showLetter(L);
     });
 
-    // Перерахунок при зміні розміру
     window.addEventListener('resize', layout);
-    // Перше розміщення
     layout();
 
-    // Для деяких браузерів, щоб завантажити голоси
+    // PWA: реєстрація Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .catch(err => console.error('SW registration failed:', err));
+    }
     speechSynthesis.onvoiceschanged = () => {};
   </script>
 </body>
