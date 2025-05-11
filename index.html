@@ -40,6 +40,13 @@
       background: #fff; z-index: 100;
     }
     #overlay .big { font-size: 20vw; }
+    #error {
+      position: fixed; top: 0; left: 0;
+      width: 100%; padding: 10px;
+      background: #e74c3c; color: white;
+      text-align: center; font-size: 1rem;
+      display: none; z-index: 200;
+    }
     #controls {
       position: fixed; bottom: 10px; left: 50%;
       transform: translateX(-50%); z-index: 200;
@@ -57,6 +64,7 @@
 </head>
 <body>
 
+  <div id="error"></div>
   <div id="container"></div>
   <div id="overlay"><div class="big"></div></div>
 
@@ -72,20 +80,19 @@
     const container   = document.getElementById('container');
     const overlay     = document.getElementById('overlay');
     const bigDiv      = overlay.querySelector('.big');
+    const errorDiv    = document.getElementById('error');
     const controls    = document.getElementById('controls');
     const hiddenInput = document.getElementById('hidden-input');
     let hideTimer     = null;
-    let currentAudio  = null;
 
-    // Підготовка аудіо-файлів як fallback
-    const audioMap = {};
-    letters.forEach(L => {
-      const audio = new Audio(`sounds/${L}.mp3`);
-      audio.preload = 'auto';
-      audioMap[L] = audio;
-    });
+    // Функція помилки
+    function showError(msg) {
+      errorDiv.textContent = `Помилка: ${msg}`;
+      errorDiv.style.display = 'block';
+      setTimeout(() => errorDiv.style.display = 'none', 3000);
+    }
 
-    // Розмітка квадратиків
+    // Розкладка квадратиків
     function layout() {
       const gap       = 5;
       const totalW    = window.innerWidth - gap*2;
@@ -94,24 +101,25 @@
       let bestSize    = 0;
 
       for (let cols = 1; cols <= letters.length; cols++) {
-        const rows    = Math.ceil(letters.length / cols);
-        const cellW   = (totalW - gap*(cols-1)) / cols;
-        const gridH   = rows*cellW + gap*(rows-1);
+        const rows  = Math.ceil(letters.length / cols);
+        const cellW = (totalW - gap*(cols-1)) / cols;
+        const gridH = rows*cellW + gap*(rows-1);
         if (gridH <= totalH && cellW > bestSize) bestSize = cellW;
       }
       if (bestSize === 0) {
-        const cols   = letters.length;
-        const rows   = 1;
-        const cellW  = (totalW - gap*(cols-1)) / cols;
-        const cellH  = (totalH - gap*(rows-1)) / rows;
-        bestSize     = Math.min(cellW, cellH);
+        const cellW = Math.min(
+          (totalW - gap*(letters.length-1)) / letters.length,
+          totalH
+        );
+        bestSize = cellW;
       }
 
-      document.documentElement.style.setProperty('--gap', gap + 'px');
-      document.documentElement.style.setProperty('--cell-size', bestSize + 'px');
+      document.documentElement.style.setProperty('--gap', `${gap}px`);
+      document.documentElement.style.setProperty('--cell-size', `${bestSize}px`);
       document.documentElement.style.setProperty('--controls-height', `${controlsH}px`);
     }
 
+    // Створення буквених квадратиків
     letters.forEach(L => {
       const div = document.createElement('div');
       div.className   = 'letter';
@@ -120,33 +128,45 @@
       container.append(div);
     });
 
-    // Показ і озвучення букви
+    // Показ і озвучення букви через SpeechSynthesis
     function showLetter(L) {
+      // Відобразити велику букву
       bigDiv.textContent = L;
       overlay.style.display = 'flex';
       clearTimeout(hideTimer);
       hideTimer = setTimeout(() => overlay.style.display = 'none', 2000);
 
-      // Спробувати Web Speech API, інакше fallback на Audio
+      // Перевірка підтримки API
+      if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+        showError('Ваш браузер не підтримує Speech Synthesis API');
+        return;
+      }
       const voices = speechSynthesis.getVoices();
-      if (speechSynthesis && voices.length > 0 && voices.find(v => v.lang.startsWith('uk'))) {
+      if (!voices.length) {
+        showError('Голоси не завантажені');
+        return;
+      }
+      // Знаходимо український голос
+      const ukVoice = voices.find(v => v.lang.startsWith('uk'));
+      if (!ukVoice) {
+        showError('Український голос не знайдено');
+        return;
+      }
+      try {
         const utt = new SpeechSynthesisUtterance(L);
-        utt.lang  = 'uk-UA';
+        utt.voice = ukVoice;
+        utt.lang  = ukVoice.lang;
         utt.rate  = 0.9;
         utt.pitch = 1.1;
         speechSynthesis.cancel();
         speechSynthesis.speak(utt);
-      } else {
-        if (currentAudio) {
-          currentAudio.pause();
-          currentAudio.currentTime = 0;
-        }
-        currentAudio = audioMap[L];
-        currentAudio.play();
+      } catch (err) {
+        console.error(err);
+        showError(err.message || 'Помилка озвучення');
       }
     }
 
-    // Обробка клавіатури
+    // Обробка фізичної клавіатури
     document.addEventListener('keydown', e => {
       const L = e.key.toUpperCase();
       if (letters.includes(L)) {
@@ -155,6 +175,7 @@
       }
     });
 
+    // Кнопка мобільної клавіатури
     document.getElementById('show-keyboard')
       .addEventListener('click', () => hiddenInput.focus());
     hiddenInput.addEventListener('input', e => {
@@ -166,11 +187,12 @@
     window.addEventListener('resize', layout);
     layout();
 
-    // PWA: реєстрація Service Worker
+    // Реєстрація Service Worker для PWA
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js')
-        .catch(err => console.error('SW registration failed:', err));
+        .catch(err => showError('SW registration failed'));
     }
+    // Для завантаження голосів у деяких браузерах
     speechSynthesis.onvoiceschanged = () => {};
   </script>
 </body>
