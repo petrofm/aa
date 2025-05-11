@@ -59,24 +59,33 @@
 
   <div id="container"></div>
   <div id="overlay"><div class="big"></div></div>
+
   <div id="controls">
     <button id="show-keyboard">Показати клавіатуру</button>
   </div>
   <input type="text" id="hidden-input" inputmode="text" autocomplete="off">
 
   <script>
-    // 33 літери українського алфавіту
+    // Українські літери
     const letters = ['А','Б','В','Г','Ґ','Д','Е','Є','Ж','З','И','І','Ї','Й',
                      'К','Л','М','Н','О','П','Р','С','Т','У','Ф','Х','Ц','Ч','Ш','Щ','Ь','Ю','Я'];
-
     const container   = document.getElementById('container');
     const overlay     = document.getElementById('overlay');
     const bigDiv      = overlay.querySelector('.big');
     const controls    = document.getElementById('controls');
     const hiddenInput = document.getElementById('hidden-input');
     let hideTimer     = null;
+    let currentAudio  = null;
 
-    // Розкладка квадратиків
+    // Підготовка аудіо-файлів як fallback
+    const audioMap = {};
+    letters.forEach(L => {
+      const audio = new Audio(`sounds/${L}.mp3`);
+      audio.preload = 'auto';
+      audioMap[L] = audio;
+    });
+
+    // Розмітка квадратиків
     function layout() {
       const gap       = 5;
       const totalW    = window.innerWidth - gap*2;
@@ -103,7 +112,6 @@
       document.documentElement.style.setProperty('--controls-height', `${controlsH}px`);
     }
 
-    // Створення елементів
     letters.forEach(L => {
       const div = document.createElement('div');
       div.className   = 'letter';
@@ -112,22 +120,33 @@
       container.append(div);
     });
 
-    // Показ і озвучка букви
+    // Показ і озвучення букви
     function showLetter(L) {
       bigDiv.textContent = L;
       overlay.style.display = 'flex';
       clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => overlay.style.display = 'none', 2000); // 2 секунди
+      hideTimer = setTimeout(() => overlay.style.display = 'none', 2000);
 
-      const utt    = new SpeechSynthesisUtterance(L);
-      utt.lang     = 'uk-UA';
-      utt.rate     = 0.9;
-      utt.pitch    = 1.1;
-      speechSynthesis.cancel();
-      speechSynthesis.speak(utt);
+      // Спробувати Web Speech API, інакше fallback на Audio
+      const voices = speechSynthesis.getVoices();
+      if (speechSynthesis && voices.length > 0 && voices.find(v => v.lang.startsWith('uk'))) {
+        const utt = new SpeechSynthesisUtterance(L);
+        utt.lang  = 'uk-UA';
+        utt.rate  = 0.9;
+        utt.pitch = 1.1;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(utt);
+      } else {
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio.currentTime = 0;
+        }
+        currentAudio = audioMap[L];
+        currentAudio.play();
+      }
     }
 
-    // Клавіатура фізична
+    // Обробка клавіатури
     document.addEventListener('keydown', e => {
       const L = e.key.toUpperCase();
       if (letters.includes(L)) {
@@ -136,7 +155,6 @@
       }
     });
 
-    // Кнопка моб. клавіатури
     document.getElementById('show-keyboard')
       .addEventListener('click', () => hiddenInput.focus());
     hiddenInput.addEventListener('input', e => {
