@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Вивчення букв</title>
+
+  <!-- PWA: Manifest і колір статус-бара -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#48a">
+
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    #container {
+      display: flex; flex-wrap: wrap;
+      gap: var(--gap); padding: var(--gap);
+      width: 100vw; height: calc(100vh - var(--controls-height));
+    }
+    .letter {
+      flex: 0 0 var(--cell-size); height: var(--cell-size);
+      background: #eef; border: 2px solid #99c; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: calc(var(--cell-size)*0.5);
+      user-select: none; touch-action: manipulation; cursor: pointer;
+      transition: background .2s, transform .2s;
+    }
+    .letter:active {
+      background: #ddf; transform: scale(0.95);
+    }
+    #overlay {
+      position: fixed; top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      display: none; align-items: center; justify-content: center;
+      background: #fff; z-index: 100;
+    }
+    #overlay .big { font-size: 20vw; }
+    #error {
+      position: fixed; top: 0; left: 0;
+      width: 100%; padding: 10px;
+      background: #e74c3c; color: white;
+      text-align: center; font-size: 1rem;
+      display: none; z-index: 200;
+    }
+    #controls {
+      position: fixed; bottom: 10px; left: 50%;
+      transform: translateX(-50%); z-index: 200;
+    }
+    #controls button {
+      padding: 10px 20px; font-size: 1rem;
+      border: none; border-radius: 5px;
+      background: #48a; color: #fff;
+    }
+    #hidden-input {
+      position: absolute; opacity: 0; pointer-events: none;
+      height: 0; width: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="error"></div>
+  <div id="container"></div>
+  <div id="overlay"><div class="big"></div></div>
+
+  <div id="controls">
+    <button id="show-keyboard">Показати клавіатуру</button>
+  </div>
+  <input type="text" id="hidden-input" inputmode="text" autocomplete="off">
+
+  <script>
+    // Українські літери
+    const letters = ['А','Б','В','Г','Ґ','Д','Е','Є','Ж','З','И','І','Ї','Й',
+                     'К','Л','М','Н','О','П','Р','С','Т','У','Ф','Х','Ц','Ч','Ш','Щ','Ь','Ю','Я'];
+    const container   = document.getElementById('container');
+    const overlay     = document.getElementById('overlay');
+    const bigDiv      = overlay.querySelector('.big');
+    const errorDiv    = document.getElementById('error');
+    const controls    = document.getElementById('controls');
+    const hiddenInput = document.getElementById('hidden-input');
+    let hideTimer     = null;
+
+    // Функція помилки
+    function showError(msg) {
+      errorDiv.textContent = `Помилка: ${msg}`;
+      errorDiv.style.display = 'block';
+      setTimeout(() => errorDiv.style.display = 'none', 3000);
+    }
+
+    // Розкладка квадратиків
+    function layout() {
+      const gap       = 5;
+      const totalW    = window.innerWidth - gap*2;
+      const controlsH = controls.getBoundingClientRect().height + 10;
+      const totalH    = window.innerHeight - controlsH - gap*2;
+      let bestSize    = 0;
+
+      for (let cols = 1; cols <= letters.length; cols++) {
+        const rows  = Math.ceil(letters.length / cols);
+        const cellW = (totalW - gap*(cols-1)) / cols;
+        const gridH = rows*cellW + gap*(rows-1);
+        if (gridH <= totalH && cellW > bestSize) bestSize = cellW;
+      }
+      if (bestSize === 0) {
+        const cellW = Math.min(
+          (totalW - gap*(letters.length-1)) / letters.length,
+          totalH
+        );
+        bestSize = cellW;
+      }
+
+      document.documentElement.style.setProperty('--gap', `${gap}px`);
+      document.documentElement.style.setProperty('--cell-size', `${bestSize}px`);
+      document.documentElement.style.setProperty('--controls-height', `${controlsH}px`);
+    }
+
+    // Створення буквених квадратиків
+    letters.forEach(L => {
+      const div = document.createElement('div');
+      div.className   = 'letter';
+      div.textContent = L;
+      div.addEventListener('click', () => showLetter(L));
+      container.append(div);
+    });
+
+    // Показ і озвучення букви через SpeechSynthesis з fallback на російську
+    function showLetter(L) {
+      bigDiv.textContent = L;
+      overlay.style.display = 'flex';
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => overlay.style.display = 'none', 2000);
+
+      if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+        showError('Ваш браузер не підтримує Speech Synthesis API');
+        return;
+      }
+
+      const voices = speechSynthesis.getVoices();
+      if (!voices.length) {
+        showError('Голоси не завантажені');
+        return;
+      }
+
+      // Спроба українського голосу, потім російського
+      let voice = voices.find(v => v.lang.startsWith('uk'));
+      if (!voice) {
+        voice = voices.find(v => v.lang.startsWith('ru'));
+        if (voice) {
+          console.warn('Використовується російський голос замість українського');
+        }
+      }
+      if (!voice) {
+        showError('Не знайдено українського чи російського голосу');
+        return;
+      }
+
+      try {
+        const utt = new SpeechSynthesisUtterance(L);
+        utt.voice = voice;
+        utt.lang  = voice.lang;
+        utt.rate  = 0.9;
+        utt.pitch = 1.1;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(utt);
+      } catch (err) {
+        console.error(err);
+        showError(err.message || 'Помилка озвучення');
+      }
+    }
+
+    // Обробка фізичної клавіатури
+    document.addEventListener('keydown', e => {
+      const L = e.key.toUpperCase();
+      if (letters.includes(L)) {
+        showLetter(L);
+        e.preventDefault();
+      }
+    });
+
+    // Кнопка мобільної клавіатури
+    document.getElementById('show-keyboard')
+      .addEventListener('click', () => hiddenInput.focus());
+    hiddenInput.addEventListener('input', e => {
+      const L = e.target.value.slice(-1).toUpperCase();
+      e.target.value = '';
+      if (letters.includes(L)) showLetter(L);
+    });
+
+    window.addEventListener('resize', layout);
+    layout();
+
+    // Реєстрація Service Worker для PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .catch(err => showError('SW registration failed'));
+    }
+    speechSynthesis.onvoiceschanged = () => {};
+  </script>
+</body>
+</html>
